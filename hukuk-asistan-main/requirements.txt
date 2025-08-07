@@ -10,3 +10,5 @@ google-generativeai  # Google Gemini AI
 motor  # Async MongoDB driver
 pymongo  # MongoDB driver
 beanie  # ODM for MongoDB
+slowapi  # Rate limiting
+psutil  # System metrics for health checks
