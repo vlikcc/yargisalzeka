@@ -8,6 +8,7 @@ import hashlib
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from loguru import logger
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -25,6 +26,15 @@ from .database import init_database, close_database, db_manager, YargitayDecisio
 logger.remove()
 logger.add(sys.stdout, format="{time} {level} {message}", level=settings.LOG_LEVEL.upper())
 
+# Log to file in production
+if settings.is_production and settings.LOG_FILE_PATH:
+    logger.add(
+        settings.LOG_FILE_PATH,
+        rotation=settings.LOG_MAX_SIZE,
+        retention=settings.LOG_BACKUP_COUNT,
+        level=settings.LOG_LEVEL.upper()
+    )
+
 # --- Rate Limiter ---
 limiter = Limiter(key_func=get_remote_address)
 
@@ -39,7 +49,7 @@ async def lifespan(app: FastAPI):
     
     # MongoDB Atlas bağlantısını başlat (hata durumunda fallback)
     try:
-        db_connected = await init_db()
+        db_connected = await init_database()
         if db_connected:
             logger.info("MongoDB Atlas bağlantısı başarılı")
         else:
@@ -63,11 +73,31 @@ app = FastAPI(
     title="Yargıtay Scraper API",
     description="Yargıtay Karar Arama Servisi (MongoDB Atlas)",
     version="2.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if not settings.is_production else None,
+    redoc_url="/redoc" if not settings.is_production else None
 )
+
+# Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# Security middleware for production
+if settings.is_production:
+    # Trusted host middleware
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["yargisalzeka.com", "www.yargisalzeka.com", "api.yargisalzeka.com", "localhost"]
+    )
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.cors_methods_list,
+    allow_headers=settings.cors_headers_list
+)
 
 # --- Helper Functions ---
 def generate_cache_key(keywords):
@@ -83,7 +113,8 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Yargıtay Scraper API",
-        "version": "2.0.0",
+        "version": "2.1.0",
+        "environment": settings.ENVIRONMENT,
         "stats": search_stats
     }
 
@@ -92,110 +123,145 @@ async def root():
     """Ana sayfa"""
     return {
         "message": "Yargıtay Scraper API'sine hoş geldiniz",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "endpoints": {
             "health": "/health",
             "search": "/search",
-            "docs": "/docs"
+            "docs": "/docs" if not settings.is_production else None
         }
     }
 
 @app.post("/search", response_model=schemas.SearchResponse, tags=["Search"])
 @limiter.limit(settings.USER_RATE_LIMIT)
-async def search_yargitay_parallel(
-    request: Request,
-    search_request: schemas.SearchRequest
-):
-    """Anahtar kelimelerle Yargıtay'da paralel arama yapar."""
-    logger.info(f"Arama başlatıldı: {len(search_request.keywords)} anahtar kelime")
-    start_time = time.time()
+async def search_decisions(request: Request, search_request: schemas.SearchRequest):
+    """
+    Yargıtay kararlarını anahtar kelimelerle arar
     
-    # Cache kontrolü
-    cache_key = generate_cache_key(search_request.keywords)
-    if cache_key in search_cache:
-        cached_result = search_cache[cache_key]
-        logger.info(f"Cache'den sonuç döndürüldü: {len(cached_result['results'])} sonuç")
-        return schemas.SearchResponse(**cached_result)
-    
-    max_workers = min(len(search_request.keywords), 10)
-    all_results = []
-    search_details = {}
-
+    - **keywords**: Aranacak anahtar kelimeler listesi
+    - **max_results**: Maksimum sonuç sayısı (varsayılan: 10)
+    """
     try:
-        loop = asyncio.get_event_loop()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                loop.run_in_executor(executor, search_single_keyword, keyword, idx)
-                for idx, keyword in enumerate(search_request.keywords)
-            ]
-            for future in asyncio.as_completed(futures):
-                keyword, results, success, message = await future
-                all_results.extend(results)
-                search_details[keyword] = {
-                    "success": success, 
-                    "count": len(results), 
-                    "message": message
-                }
-
-        # Sonuçları unique hale getir (aynı case_number'a sahip olanları birleştir)
-        unique_results = {}
-        for result in all_results:
-            # ResultItem objesi ise dict'e çevir
-            if hasattr(result, 'model_dump'):
-                result_dict = result.model_dump()
-            elif hasattr(result, 'dict'):
-                result_dict = result.dict()
-            else:
-                result_dict = result
-            
-            case_number = result_dict.get("case_number", result_dict.get("esas_no", "unknown"))
-            if case_number not in unique_results:
-                # API uyumluluğu için ek alanlar ekle
-                result_dict.update({
-                    "case_number": result_dict.get("esas_no", ""),
-                    "title": f"{result_dict.get('daire', '')} - {result_dict.get('karar_no', '')}",
-                    "content": result_dict.get("karar_metni", ""),
-                    "date": result_dict.get("karar_tarihi", ""),
-                    "court": result_dict.get("daire", ""),
-                    "url": f"https://karararama.yargitay.gov.tr/YargitayBilgiBankasiIstemciWeb/#{result_dict.get('esas_no', '')}"
-                })
-                unique_results[case_number] = result_dict
+        start_time = time.time()
         
-        final_results = list(unique_results.values())
+        # Input validation
+        if not search_request.keywords:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="En az bir anahtar kelime gerekli"
+            )
+        
+        if len(search_request.keywords) > 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="En fazla 10 anahtar kelime kullanabilirsiniz"
+            )
+        
+        # Cache kontrolü
+        cache_key = generate_cache_key(search_request.keywords)
+        if cache_key in search_cache:
+            logger.info(f"Cache hit for keywords: {search_request.keywords}")
+            cached_result = search_cache[cache_key]
+            cached_result["from_cache"] = True
+            return cached_result
+        
+        logger.info(f"Arama başlatıldı - Anahtar kelimeler: {search_request.keywords}")
+        
+        # MongoDB'den önce ara
+        db_results = await db_manager.search_decisions(search_request.keywords)
+        if db_results:
+            logger.info(f"MongoDB'den {len(db_results)} sonuç bulundu")
+            
+            # SearchQuery kaydı oluştur
+            await db_manager.create_search_query(
+                keywords=search_request.keywords,
+                results_count=len(db_results),
+                source="mongodb"
+            )
+            
+            response = schemas.SearchResponse(
+                keywords=search_request.keywords,
+                results=db_results,
+                total_results=len(db_results),
+                search_time=time.time() - start_time,
+                from_cache=False,
+                source="mongodb"
+            )
+            
+            # Cache'e kaydet
+            search_cache[cache_key] = response.dict()
+            return response
+        
+        # MongoDB'de yoksa scraping yap
+        logger.info("MongoDB'de sonuç bulunamadı, scraping başlatılıyor...")
+        
+        # Thread pool executor ile paralel arama
+        all_results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as executor:
+            # Her anahtar kelime için ayrı bir thread başlat
+            future_to_keyword = {
+                executor.submit(search_single_keyword, keyword): keyword 
+                for keyword in search_request.keywords
+            }
+            
+            # Sonuçları topla
+            for future in concurrent.futures.as_completed(future_to_keyword):
+                keyword = future_to_keyword[future]
+                try:
+                    results = future.result()
+                    logger.info(f"'{keyword}' için {len(results)} sonuç bulundu")
+                    all_results.extend(results)
+                except Exception as e:
+                    logger.error(f"'{keyword}' aramasında hata: {str(e)}")
+        
+        # Duplicate'leri kaldır (URL bazlı)
+        unique_results = []
+        seen_urls = set()
+        for result in all_results:
+            if result.get("url") not in seen_urls:
+                seen_urls.add(result.get("url"))
+                unique_results.append(result)
+        
+        # Sonuçları MongoDB'ye kaydet
+        if unique_results:
+            saved_count = await db_manager.save_decisions(unique_results)
+            logger.info(f"{saved_count} yeni karar MongoDB'ye kaydedildi")
+        
+        # SearchQuery kaydı oluştur
+        await db_manager.create_search_query(
+            keywords=search_request.keywords,
+            results_count=len(unique_results),
+            source="scraping"
+        )
         
         # İstatistikleri güncelle
         search_stats["total_searches"] += 1
-        search_stats["total_results"] += len(final_results)
-
-        elapsed_time = time.time() - start_time
-        logger.info(f"Toplam arama süresi: {elapsed_time:.2f} saniye. Sonuç sayısı: {len(final_results)}")
-
-        response_data = {
-            "results": final_results,
-            "success": True,
-            "message": f"Paralel arama {elapsed_time:.2f} saniyede tamamlandı. {len(final_results)} unique sonuç bulundu.",
-            "search_details": search_details,
-            "processing_time": elapsed_time,
-            "total_keywords": len(search_request.keywords),
-            "unique_results": len(final_results)
-        }
+        search_stats["total_results"] += len(unique_results)
         
-        # Cache'e kaydet (en fazla 100 arama sonucu cache'de tutalım)
-        if len(search_cache) < 100:
-            search_cache[cache_key] = response_data
+        # Response oluştur
+        search_time = time.time() - start_time
+        response = schemas.SearchResponse(
+            keywords=search_request.keywords,
+            results=unique_results[:search_request.max_results],
+            total_results=len(unique_results),
+            search_time=search_time,
+            from_cache=False,
+            source="scraping"
+        )
         
-        return schemas.SearchResponse(**response_data)
+        # Cache'e kaydet
+        search_cache[cache_key] = response.dict()
         
+        logger.info(f"Arama tamamlandı - Toplam {len(unique_results)} sonuç, {search_time:.2f} saniye")
+        
+        return response
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Arama hatası: {str(e)}")
-        return schemas.SearchResponse(
-            results=[],
-            success=False,
-            message=f"Arama sırasında hata oluştu: {str(e)}",
-            search_details={},
-            processing_time=time.time() - start_time,
-            total_keywords=len(search_request.keywords),
-            unique_results=0
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Arama sırasında hata oluştu: {str(e)}"
         )
 
 @app.get("/stats", tags=["Statistics"])
