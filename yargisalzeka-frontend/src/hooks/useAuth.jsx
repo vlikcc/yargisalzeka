@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react'
+import { apiService } from '../services/api.js'
 
 // Auth Context
 const AuthContext = createContext()
@@ -11,14 +12,29 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state from localStorage
   useEffect(() => {
-    const initAuth = () => {
+    const initAuth = async () => {
       try {
         const storedToken = localStorage.getItem('auth_token')
         const storedUser = localStorage.getItem('user_data')
         
         if (storedToken && storedUser) {
           setToken(storedToken)
-          setUser(JSON.parse(storedUser))
+          const parsed = JSON.parse(storedUser)
+          setUser(parsed)
+          // Kullanıcı bilgilerini /auth/me'den hydrate et (full_name ve plan için)
+          try {
+            const me = await apiService.getMe({
+              'Authorization': `Bearer ${storedToken}`,
+              'Content-Type': 'application/json'
+            })
+            if (me && me.full_name) {
+              const hydrated = { ...parsed, full_name: me.full_name, email: me.email, subscription_plan: me.subscription_plan, user_id: me.id }
+              setUser(hydrated)
+              localStorage.setItem('user_data', JSON.stringify(hydrated))
+            }
+          } catch (e) {
+            // sessizce geç
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error)

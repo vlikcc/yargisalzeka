@@ -106,6 +106,10 @@ class ApiService {
     return this.get('/user/usage', headers)
   }
 
+  async getMe(headers = {}) {
+    return this.get('/auth/me', headers)
+  }
+
   // Workflow methods
   async generatePetition(caseText, petitionType, headers = {}) {
     return this.post('/workflow/generate-petition', {

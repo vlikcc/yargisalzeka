@@ -352,12 +352,12 @@ def _get_mock_search_results():
 # --- User Usage Endpoints ---
 @app.get("/api/v1/user/usage")
 @limiter.limit("30/minute")
-async def get_user_usage(request: Request, current_user: dict = Depends(get_current_user)):
+async def get_user_usage(request: Request, current_user: TokenData = Depends(get_current_user)):
     """Get current user's usage statistics"""
     try:
         from .usage_middleware import get_user_usage_info
         
-        user_id = current_user.get('id')
+        user_id = getattr(current_user, 'user_id', None)
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
