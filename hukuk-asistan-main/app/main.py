@@ -72,12 +72,12 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS middleware ekle - güvenli ayarlar
+# CORS middleware ekle - production'da tüm origin'lere izin ver
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,  # Production'da güvenli origins
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_origins=["*"] if settings.is_production else settings.cors_origins,  # Production'da tüm origin'lere izin ver
+    allow_credentials=False if settings.is_production else True,  # Production'da credentials false (wildcard origin ile)
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     max_age=3600,  # Preflight cache süresi
 )

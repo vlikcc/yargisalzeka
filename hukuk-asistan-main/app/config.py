@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         if self.is_production:
-            return [origin for origin in self.CORS_ORIGINS if not origin.startswith("http://localhost")]
+            # Production'da tüm origin'lere izin ver (domain henüz alınmadığı için)
+            return ["*"]
         return self.CORS_ORIGINS
 
 settings = Settings()

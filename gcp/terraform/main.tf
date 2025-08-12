@@ -329,6 +329,7 @@ resource "google_cloudfunctions_function" "yargitay_scraper" {
   runtime     = "python311"
   region      = var.region
   project     = var.project_id
+  entry_point = "scrape_yargitay"
 
   available_memory_mb   = 2048
   timeout               = 540
@@ -338,9 +339,7 @@ resource "google_cloudfunctions_function" "yargitay_scraper" {
   source_archive_bucket = google_storage_bucket.static_assets.name
   source_archive_object = "scraper-function.zip"
 
-  trigger {
-    https_trigger {}
-  }
+  trigger_http = true
 
   environment_variables = {
     GCP_PROJECT  = var.project_id
@@ -406,7 +405,6 @@ resource "google_compute_url_map" "default" {
 resource "google_compute_backend_service" "main_api" {
   name        = "yargisalzeka-api-backend"
   protocol    = "HTTP"
-  timeout_sec = 300
 
   backend {
     group = google_compute_region_network_endpoint_group.main_api.id
@@ -417,7 +415,6 @@ resource "google_compute_backend_service" "main_api" {
 resource "google_compute_backend_service" "frontend" {
   name        = "yargisalzeka-frontend-backend"
   protocol    = "HTTP"
-  timeout_sec = 60
 
   backend {
     group = google_compute_region_network_endpoint_group.frontend.id

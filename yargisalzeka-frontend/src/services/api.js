@@ -1,5 +1,5 @@
 // API Service Layer
-const API_BASE_URL = '/api/v1'
+const API_BASE_URL = 'https://yargisalzeka-api-77794337596.europe-west1.run.app/api/v1'
 
 class ApiService {
   constructor() {

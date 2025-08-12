@@ -15,7 +15,7 @@ import {
   Crown,
   Zap
 } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth.js'
+import { useAuth } from '../hooks/useAuth.jsx'
 import { apiService } from '../services/api.js'
 
 const UserDashboard = ({ onClose }) => {

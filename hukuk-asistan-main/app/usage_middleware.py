@@ -87,5 +87,18 @@ async def get_user_usage_info(user_id: str) -> dict:
         }
     except Exception as e:
         logger.error(f"Error getting user usage info: {e}")
-        return {}
+        # Return default values if there's an error
+        return {
+            "usage_stats": {
+                "subscription_plan": "trial",
+                "is_trial_active": True,
+                "trial_searches_used": 0,
+                "trial_searches_limit": 5,
+                "monthly_searches_used": 0,
+                "monthly_search_limit": 5
+            },
+            "can_search": True,
+            "remaining_searches": 5,
+            "plan": "trial"
+        }
 

@@ -30,17 +30,18 @@ RUN apk update && apk upgrade && apk add --no-cache curl
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy Cloud Run optimized nginx configuration
-COPY gcp/frontend/nginx.conf /etc/nginx/nginx.conf
+# Copy Cloud Run optimized nginx configuration template
+COPY gcp/frontend/nginx.conf /etc/nginx/nginx.conf.template
+
+# Install envsubst for environment variable substitution
+RUN apk add --no-cache gettext
 
 # Create nginx user and set permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /var/log/nginx && \
-    chown -R nginx:nginx /etc/nginx/conf.d
-
-# Switch to non-root user
-USER nginx
+    chown -R nginx:nginx /etc/nginx/conf.d && \
+    chown nginx:nginx /etc/nginx/nginx.conf.template
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
@@ -49,6 +50,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 # Cloud Run expects port 8080
 EXPOSE 8080
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start script that substitutes environment variables and starts nginx (run as root to create config file)
+CMD envsubst '${API_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
+    chown nginx:nginx /etc/nginx/nginx.conf && \
+    nginx -g 'daemon off;'
 

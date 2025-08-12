@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.j
 import { Brain, Search, FileText, Zap, CheckCircle, Star, Clock, Users, Scale, Cpu, Target, Award, User } from 'lucide-react'
 import AuthModal from './components/AuthModal.jsx'
 import UserDashboard from './components/UserDashboard.jsx'
-import { AuthProvider, useAuth } from './hooks/useAuth.js'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
 import { apiService, ApiError } from './services/api.js'
 import './App.css'
 
@@ -143,7 +144,7 @@ function AppContent() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <img 
-                src="/src/assets/yargisalzeka-logo.png" 
+                src="/yargisalzeka-logo.png" 
                 alt="Yargısal Zeka Logo" 
                 className="h-12 w-auto"
               />
@@ -152,7 +153,7 @@ function AppContent() {
                 <p className="text-sm gold-text">Yapay Zeka Destekli Yargıtay Kararı Arama Platformu</p>
               </div>
             </div>
-            <nav className="flex space-x-6">
+            <nav className="hidden md:flex space-x-6">
               <Button 
                 variant="ghost" 
                 onClick={() => setActiveTab('search')}
@@ -178,13 +179,24 @@ function AppContent() {
                 {isAuthenticated() ? (
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4" />
-                    <span>{user?.full_name?.split(' ')[0] || 'Kullanıcı'}</span>
+                    <span className="hidden sm:inline">{user?.full_name?.split(' ')[0] || 'Kullanıcı'}</span>
                   </div>
                 ) : (
                   'Giriş Yap'
                 )}
               </Button>
             </nav>
+            
+            {/* Mobile Navigation */}
+            <div className="md:hidden">
+              <Button className="btn-primary" onClick={handleLogin}>
+                {isAuthenticated() ? (
+                  <User className="h-4 w-4" />
+                ) : (
+                  'Giriş'
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -439,7 +451,7 @@ function AppContent() {
               <Card className="feature-card text-center">
                 <CardHeader>
                   <img 
-                    src="/src/assets/ai-brain-analysis.png" 
+                    src="/ai-brain-analysis.png" 
                     alt="AI Analiz" 
                     className="w-20 h-20 mx-auto mb-4 rounded-lg"
                   />
@@ -455,7 +467,7 @@ function AppContent() {
               <Card className="feature-card text-center">
                 <CardHeader>
                   <img 
-                    src="/src/assets/parallel-search-tech.png" 
+                    src="/parallel-search-tech.png" 
                     alt="Paralel Arama" 
                     className="w-20 h-20 mx-auto mb-4 rounded-lg"
                   />
@@ -471,7 +483,7 @@ function AppContent() {
               <Card className="feature-card text-center">
                 <CardHeader>
                   <img 
-                    src="/src/assets/smart-scoring-system.png" 
+                    src="/smart-scoring-system.png" 
                     alt="Akıllı Puanlama" 
                     className="w-20 h-20 mx-auto mb-4 rounded-lg"
                   />
@@ -605,12 +617,14 @@ function AppContent() {
   )
 }
 
-// Main App component with AuthProvider
+// Main App component with ErrorBoundary and AuthProvider
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

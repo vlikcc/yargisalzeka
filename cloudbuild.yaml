@@ -23,7 +23,7 @@ steps:
       - 'gcr.io/$PROJECT_ID/yargisalzeka-frontend:latest'
       - '-f'
       - 'gcp/frontend/Dockerfile'
-      - './yargisalzeka-frontend'
+      - '.'
     id: 'build-frontend'
 
   # Push Main API image
@@ -96,7 +96,9 @@ steps:
       - '--concurrency'
       - '1000'
       - '--port'
-      - '80'
+      - '8080'
+      - '--set-env-vars'
+      - 'API_URL=https://yargisalzeka-api-${_PROJECT_ID}-ew.a.run.app'
 
   # Deploy Cloud Functions
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -141,6 +143,7 @@ options:
 substitutions:
   _GEMINI_API_KEY: 'your-gemini-api-key'
   _JWT_SECRET_KEY: 'your-jwt-secret-key'
+  _PROJECT_ID: 'your-project-id'
 
 # Timeout for the entire build
 timeout: '1200s'

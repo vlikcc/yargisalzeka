@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input.jsx'
 import { Label } from '@/components/ui/label.jsx'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx'
 import { X, Eye, EyeOff, Mail, Lock, User, CheckCircle, AlertCircle } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth.jsx'
 
 const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
   const [activeTab, setActiveTab] = useState(defaultTab)
@@ -12,6 +13,8 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
+  
+  const { login: authLogin } = useAuth()
 
   // Login form state
   const [loginData, setLoginData] = useState({
@@ -66,7 +69,9 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
     setMessage({ type: '', text: '' })
 
     try {
-      const response = await fetch('/api/v1/auth/login', {
+      const API_BASE_URL = 'https://yargisalzeka-api-77794337596.europe-west1.run.app/api/v1'
+      
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,17 +84,22 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
 
       const data = await response.json()
 
-      if (response.ok && data.status === 'success') {
-        // JWT token'ı localStorage'a kaydet
-        localStorage.setItem('auth_token', data.access_token)
-        localStorage.setItem('user_data', JSON.stringify(data.user_data))
+      if (response.ok && data.access_token) {
+        // Use auth context to handle login
+        // Create user_data from token or use a default structure
+        const user_data = {
+          user_id: data.user_id || 'unknown',
+          email: loginData.email,
+          subscription_plan: 'trial'
+        }
+        
+        authLogin(user_data, data.access_token)
         
         setMessage({ type: 'success', text: 'Giriş başarılı! Yönlendiriliyorsunuz...' })
         
-        // 2 saniye sonra modal'ı kapat ve sayfayı yenile
+        // 2 saniye sonra modal'ı kapat
         setTimeout(() => {
           handleClose()
-          window.location.reload()
         }, 2000)
       } else {
         setMessage({ type: 'error', text: data.detail || 'Giriş yapılırken bir hata oluştu.' })
@@ -129,7 +139,9 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
     setMessage({ type: '', text: '' })
 
     try {
-      const response = await fetch('/api/v1/auth/register', {
+      const API_BASE_URL = 'https://yargisalzeka-api-77794337596.europe-west1.run.app/api/v1'
+      
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

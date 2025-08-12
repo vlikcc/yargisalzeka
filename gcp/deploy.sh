@@ -83,13 +83,13 @@ build_and_push_images() {
     
     # Build Main API image
     log "Building Main API image..."
-    docker build -t gcr.io/$PROJECT_ID/yargisalzeka-main-api:latest \
+    docker build --platform linux/amd64 -t gcr.io/$PROJECT_ID/yargisalzeka-main-api:latest \
         -f gcp/main-api/Dockerfile ./hukuk-asistan-main
     
     # Build Frontend image
     log "Building Frontend image..."
-    docker build -t gcr.io/$PROJECT_ID/yargisalzeka-frontend:latest \
-        -f gcp/frontend/Dockerfile ./yargisalzeka-frontend
+    docker build --platform linux/amd64 -t gcr.io/$PROJECT_ID/yargisalzeka-frontend:latest \
+        -f gcp/frontend/Dockerfile .
     
     # Push images
     log "Pushing images to Container Registry..."

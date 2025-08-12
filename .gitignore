@@ -153,3 +153,13 @@ build/
 .cache/
 .parcel-cache
 
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Environment files
+.env.development
+.env.production
+
