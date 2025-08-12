@@ -103,6 +103,7 @@ async def login_user(request: Request, user_credentials: UserLogin):
         user_data = {
             "user_id": user["id"],
             "email": user["email"],
+            "full_name": user.get("full_name", ""),
             "subscription_plan": user.get("subscription_plan", "free")
         }
         
@@ -139,15 +140,24 @@ async def get_current_user_info(current_user: TokenData = Depends(get_current_us
     Mevcut kullanıcı bilgilerini al
     """
     try:
-        # Database'den kullanıcı detaylarını al (şimdilik mock)
+        # Firestore'dan kullanıcı detaylarını al
+        user = await firestore_manager.get_user_by_id(current_user.user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kullanıcı bulunamadı"
+            )
+        
         return UserResponse(
-            id=current_user.user_id,
-            email=current_user.email,
-            full_name="Demo User",
-            is_active=True,
-            subscription_plan=current_user.subscription_plan,
-            created_at="2024-01-01T00:00:00Z"
+            id=user["id"],
+            email=user["email"],
+            full_name=user.get("full_name", ""),
+            is_active=user.get("is_active", True),
+            subscription_plan=user.get("subscription_plan", "free"),
+            created_at=user.get("created_at", "").isoformat() if user.get("created_at") else ""
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Kullanıcı bilgisi alma hatası: {e}")
         raise HTTPException(

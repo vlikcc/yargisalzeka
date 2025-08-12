@@ -85,12 +85,30 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
       const data = await response.json()
 
       if (response.ok && data.access_token) {
-        // Use auth context to handle login
-        // Create user_data from token or use a default structure
-        const user_data = {
+        // Kullanıcı bilgilerini API'den al
+        const userInfoResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${data.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        let user_data = {
           user_id: data.user_id || 'unknown',
           email: loginData.email,
-          subscription_plan: 'trial'
+          subscription_plan: 'trial',
+          full_name: ''
+        }
+        
+        // Eğer kullanıcı bilgileri alınabiliyorsa, güncelle
+        if (userInfoResponse.ok) {
+          const userInfo = await userInfoResponse.json()
+          user_data = {
+            user_id: userInfo.id,
+            email: userInfo.email,
+            full_name: userInfo.full_name || '',
+            subscription_plan: userInfo.subscription_plan || 'trial'
+          }
         }
         
         authLogin(user_data, data.access_token)
