@@ -224,7 +224,8 @@ async def smart_search(request: Request, search_request: SmartSearchRequest):
             client: httpx.AsyncClient = request.app.state.http_client
             search_payload = {"keywords": keywords, "max_results": search_request.max_results}
             
-            scraper_url = f"{settings.SCRAPER_API_URL}/search"
+            # SCRAPER_API_URL tam uç nokta olmalı (Cloud Function veya service)
+            scraper_url = settings.SCRAPER_API_URL.rstrip("/")
             response = await client.post(scraper_url, json=search_payload, timeout=30.0)
             
             if response.status_code == 200:
