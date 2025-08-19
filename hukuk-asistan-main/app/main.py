@@ -157,9 +157,13 @@ async def extract_keywords(
         )
 
 @app.post("/api/v1/ai/analyze-decision", response_model=DecisionAnalysisResponse)
-async def analyze_decision(request: DecisionAnalysisRequest):
+async def analyze_decision(
+    request: DecisionAnalysisRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
     """
     Bir Yargıtay kararının olay metniyle ilişkisini analiz eder
+    Kimlik doğrulaması gerekli
     """
     try:
         analysis = await gemini_service.analyze_decision_relevance(
@@ -182,9 +186,13 @@ async def analyze_decision(request: DecisionAnalysisRequest):
         )
 
 @app.post("/api/v1/ai/generate-petition", response_model=PetitionGenerationResponse)
-async def generate_petition(request: PetitionGenerationRequest):
+async def generate_petition(
+    request: PetitionGenerationRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
     """
     Olay metni ve alakalı kararlardan dilekçe şablonu oluşturur
+    Kimlik doğrulaması gerekli
     """
     try:
         petition = await gemini_service.generate_petition_template(
@@ -204,16 +212,28 @@ async def generate_petition(request: PetitionGenerationRequest):
             message=f"Hata: {str(e)}"
         )
 
+# Dependency for HTTP client
+async def get_http_client(request: Request) -> httpx.AsyncClient:
+    return request.app.state.http_client
+
 @app.post("/api/v1/ai/smart-search", response_model=SmartSearchResponse)
-async def smart_search(request: Request, search_request: SmartSearchRequest):
+async def smart_search(
+    search_request: SmartSearchRequest,
+    current_user: TokenData = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_http_client)
+):
     """
     Akıllı arama: Olay metninden anahtar kelime çıkarır, 
     Yargıtay'da arar ve sonuçları puanlar
+    Kimlik doğrulaması gerekli
     """
     try:
+        # Input validation
+        validated_text = validate_input(search_request.case_text, max_length=5000)
+
         # 1. Anahtar kelimeleri çıkar
         try:
-            keywords = await gemini_service.extract_keywords_from_case(search_request.case_text)
+            keywords = await gemini_service.extract_keywords_from_case(validated_text)
         except Exception as e:
             logger.warning(f"Gemini API hatası, fallback keywords kullanılıyor: {e}")
             # Fallback keywords
@@ -221,7 +241,6 @@ async def smart_search(request: Request, search_request: SmartSearchRequest):
         
         # 2. Yargıtay scraper API'sini çağır
         try:
-            client: httpx.AsyncClient = request.app.state.http_client
             search_payload = {"keywords": keywords, "max_results": search_request.max_results}
             
             # SCRAPER_API_URL tam uç nokta olmalı (Cloud Function veya service)
@@ -243,7 +262,7 @@ async def smart_search(request: Request, search_request: SmartSearchRequest):
         for result in search_results[:search_request.max_results]:
             try:
                 analysis = await gemini_service.analyze_decision_relevance(
-                    search_request.case_text, 
+                    validated_text,
                     result.get("content", "")
                 )
             except Exception:
@@ -273,6 +292,8 @@ async def smart_search(request: Request, search_request: SmartSearchRequest):
             message=f"{len(analyzed_results)} sonuç AI ile analiz edildi"
         )
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Akıllı arama hatası: {e}")
         return SmartSearchResponse(
@@ -286,13 +307,18 @@ async def smart_search(request: Request, search_request: SmartSearchRequest):
 # --- Workflow Mikroservisi ---
 
 @app.post("/api/v1/workflow/complete-analysis", response_model=WorkflowAnalysisResponse)
-async def complete_analysis_workflow(request: Request, workflow_request: WorkflowAnalysisRequest):
+async def complete_analysis_workflow(
+    request: Request,
+    workflow_request: WorkflowAnalysisRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
     """
     Tam analiz workflow'u - n8n'in yerini alan mikroservis
     1. Anahtar kelime çıkarma
     2. Yargıtay'da arama
     3. Sonuçları AI ile puanlama
     4. İsteğe bağlı dilekçe şablonu oluşturma
+    Kimlik doğrulaması gerekli
     """
     try:
         client: httpx.AsyncClient = request.app.state.http_client

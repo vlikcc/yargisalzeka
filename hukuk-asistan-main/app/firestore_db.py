@@ -344,35 +344,6 @@ class FirestoreManager:
                 'timestamp': datetime.now().isoformat()
             }
 
-# Global Firestore manager instance
-firestore_manager = FirestoreManager()
-
-# Convenience functions for backward compatibility
-async def init_firestore_db() -> bool:
-    """Initialize Firestore database"""
-    return firestore_manager.is_connected()
-
-async def close_firestore_database():
-    """Close Firestore database connection"""
-    # Firestore client doesn't need explicit closing
-    logger.info("Firestore database connection closed")
-
-async def get_firestore_health() -> Dict[str, Any]:
-    """Get Firestore health status"""
-    return await firestore_manager.health_check()
-
-async def log_api_usage(user_id: str, endpoint: str, request_data: Dict[str, Any], ip_address: str) -> bool:
-    """Log API usage to Firestore"""
-    return await firestore_manager.log_api_usage(
-        user_id=user_id,
-        endpoint=endpoint,
-        method="POST",
-        ip_address=ip_address,
-        status_code=200,
-        response_time=None
-    )
-
-
     # Usage Tracking Methods
     async def check_user_search_limit(self, user_id: str) -> Dict[str, Any]:
         """Check if user can perform a search based on their limits"""
@@ -495,3 +466,30 @@ async def log_api_usage(user_id: str, endpoint: str, request_data: Dict[str, Any
             logger.error(f"Error getting user usage stats: {e}")
             return {}
 
+# Global Firestore manager instance
+firestore_manager = FirestoreManager()
+
+# Convenience functions for backward compatibility
+async def init_firestore_db() -> bool:
+    """Initialize Firestore database"""
+    return firestore_manager.is_connected()
+
+async def close_firestore_database():
+    """Close Firestore database connection"""
+    # Firestore client doesn't need explicit closing
+    logger.info("Firestore database connection closed")
+
+async def get_firestore_health() -> Dict[str, Any]:
+    """Get Firestore health status"""
+    return await firestore_manager.health_check()
+
+async def log_api_usage(user_id: str, endpoint: str, request_data: Dict[str, Any], ip_address: str) -> bool:
+    """Log API usage to Firestore"""
+    return await firestore_manager.log_api_usage(
+        user_id=user_id,
+        endpoint=endpoint,
+        method="POST",
+        ip_address=ip_address,
+        status_code=200,
+        response_time=None
+    )

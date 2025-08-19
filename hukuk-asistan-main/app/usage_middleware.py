@@ -4,7 +4,7 @@ Usage tracking middleware for API endpoints
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from .firestore_db import firestore_manager
-from .security import get_current_user
+from .security import verify_token
 from loguru import logger
 import time
 
@@ -32,12 +32,13 @@ async def check_usage_limits(request: Request, call_next):
             return response
         
         token = auth_header.split(' ')[1]
-        user_data = await get_current_user(token)
-        user_id = user_data.get('id')
+        user_data = verify_token(token)
         
-        if not user_id:
+        if not user_data or not user_data.user_id:
             response = await call_next(request)
             return response
+
+        user_id = user_data.user_id
         
         # Check usage limits
         usage_check = await firestore_manager.check_user_search_limit(user_id)
